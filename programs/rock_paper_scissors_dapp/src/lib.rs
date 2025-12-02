@@ -334,33 +334,31 @@ pub mod rps_game {
     ) -> Result<()> {
         let game = &mut ctx.accounts.game;
         let player = &ctx.accounts.player;
-
+    
         require!(game.status == GameStatus::Active, RpsError::GameNotActive);
         require!((round_index as usize) < MAX_ROUNDS, RpsError::InvalidRound);
         require!(move_value <= 2, RpsError::InvalidMove);
-
+    
         let idx = round_index as usize;
-
-    // koray - 28.11.2025 CHANGED: no reveal time limit, but enforce both commits and not resolved
-    require!(
-        game.committed_p1[idx] && game.committed_p2[idx],
-        RpsError::BothMustCommitFirst
-    );
-    require!(
-        !game.round_resolved[idx],
-        RpsError::RoundAlreadyResolved
-    );
-
-    let pk = player.key();
-    let is_p1 = pk == game.player1 || pk == game.session_p1;
-    let is_p2 = pk == game.player2 || pk == game.session_p2;
-    require!(is_p1 || is_p2, RpsError::NotAPlayer);
-
+    
+        // koray - 28.11.2025 CHANGED: no reveal time limit, but enforce both commits and not resolved
+        require!(
+            game.committed_p1[idx] && game.committed_p2[idx],
+            RpsError::BothMustCommitFirst
+        );
+        require!(
+            !game.round_resolved[idx],
+            RpsError::RoundAlreadyResolved
+        );
+    
+        let pk = player.key();
+        let is_p1 = pk == game.player1 || pk == game.session_p1;
+        let is_p2 = pk == game.player2 || pk == game.session_p2;
+        require!(is_p1 || is_p2, RpsError::NotAPlayer);
+    
         // recompute commitment hash
-        // Use main wallet pubkey (not session key) for commitment verification
-        // because Unity computes commitment with main wallet
         let commitment_pubkey = if is_p1 { game.player1 } else { game.player2 };
-
+    
         let mut hasher = Sha256::new();
         hasher.update(&[move_value]);
         hasher.update(&nonce);
@@ -370,7 +368,7 @@ pub mod rps_game {
         let hash = hasher.finalize();
         let mut hash_bytes = [0u8; 32];
         hash_bytes.copy_from_slice(&hash[..]);
-
+    
         if is_p1 {
             require!(game.committed_p1[idx], RpsError::NotCommittedYet);
             require!(!game.revealed_p1[idx], RpsError::AlreadyRevealed);
@@ -390,17 +388,21 @@ pub mod rps_game {
             game.moves_p2[idx] = move_value;
             game.revealed_p2[idx] = true;
         }
-
-        // resolution logic unchanged...
+    
+        // resolution logic
         if game.revealed_p1[idx] && game.revealed_p2[idx] {
             let m1 = game.moves_p1[idx];
             let m2 = game.moves_p2[idx];
             let round_result = round_winner(m1, m2);
-
+    
             match round_result {
                 RoundResult::Player1Win => {
                     game.player1_wins = game
                         .player1_wins
+                        .checked_add(1)
+                        .ok_or(RpsError::MathOverflow)?;
+                    game.rounds_played = game
+                        .rounds_played
                         .checked_add(1)
                         .ok_or(RpsError::MathOverflow)?;
                 }
@@ -409,24 +411,30 @@ pub mod rps_game {
                         .player2_wins
                         .checked_add(1)
                         .ok_or(RpsError::MathOverflow)?;
+                    game.rounds_played = game
+                        .rounds_played
+                        .checked_add(1)
+                        .ok_or(RpsError::MathOverflow)?;
                 }
-                RoundResult::Draw => { /* no change */ }
+                RoundResult::Draw => {
+                    // Draw da bir "round" sayılıyor ama kimse win almıyor
+                    game.rounds_played = game
+                        .rounds_played
+                        .checked_add(1)
+                        .ok_or(RpsError::MathOverflow)?;
+                    msg!("Round {} ended in a TIE", round_index);
+                }
             }
-
-            game.rounds_played = game
-                .rounds_played
-                .checked_add(1)
-                .ok_or(RpsError::MathOverflow)?;
-
+    
             game.round_resolved[idx] = true;
-
+    
             if game.player1_wins >= 3
                 || game.player2_wins >= 3
                 || game.rounds_played >= MAX_ROUNDS as u8
             {
                 game.status = GameStatus::Finished;
             }
-
+    
             emit!(RoundResultEvent {
                 game_id: game.game_id,
                 round: round_index,
@@ -436,9 +444,10 @@ pub mod rps_game {
                 status: game.status,
             });
         }
-
+    
         Ok(())
     }
+    
 
         /// Resolves a round by timeout after the commit window has expired.
     ///
@@ -458,13 +467,13 @@ pub mod rps_game {
         round_index: u8,
     ) -> Result<()> {
         let game = &mut ctx.accounts.game;
-
+    
         require!(game.status == GameStatus::Active, RpsError::GameNotActive);
         require!((round_index as usize) < MAX_ROUNDS, RpsError::InvalidRound);
-
+    
         let idx = round_index as usize;
         let current_slot = Clock::get()?.slot;
-
+    
         // Commit penceresi başlatılmış olmalı
         require!(
             game.commit_deadline_slots[idx] != 0,
@@ -480,14 +489,14 @@ pub mod rps_game {
             !game.round_resolved[idx],
             RpsError::RoundAlreadyResolved
         );
-
+    
         let c1 = game.committed_p1[idx];
         let c2 = game.committed_p2[idx];
-
+    
         // Eğer iki taraf da commit ettiyse time-out resolve yasak,
         // mutlaka reveal ile devam etmelisin.
         require!(!(c1 && c2), RpsError::BothCommittedNoTimeout);
-
+    
         let result = if c1 && !c2 {
             RoundResult::Player1Win
         } else if !c1 && c2 {
@@ -495,11 +504,15 @@ pub mod rps_game {
         } else {
             RoundResult::Draw
         };
-
+    
         match result {
             RoundResult::Player1Win => {
                 game.player1_wins = game
                     .player1_wins
+                    .checked_add(1)
+                    .ok_or(RpsError::MathOverflow)?;
+                game.rounds_played = game
+                    .rounds_played
                     .checked_add(1)
                     .ok_or(RpsError::MathOverflow)?;
             }
@@ -508,24 +521,33 @@ pub mod rps_game {
                     .player2_wins
                     .checked_add(1)
                     .ok_or(RpsError::MathOverflow)?;
+                game.rounds_played = game
+                    .rounds_played
+                    .checked_add(1)
+                    .ok_or(RpsError::MathOverflow)?;
             }
-            RoundResult::Draw => { /* no change */ }
+            RoundResult::Draw => {
+                // Kimse commit etmediyse de bu round yanmış kabul ediyoruz
+                game.rounds_played = game
+                    .rounds_played
+                    .checked_add(1)
+                    .ok_or(RpsError::MathOverflow)?;
+                msg!(
+                    "Timeout round {} ended in a TIE (no commits) - round consumed",
+                    round_index
+                );
+            }
         }
-
-        game.rounds_played = game
-            .rounds_played
-            .checked_add(1)
-            .ok_or(RpsError::MathOverflow)?;
-
+    
         game.round_resolved[idx] = true;
-
+    
         if game.player1_wins >= 3
             || game.player2_wins >= 3
             || game.rounds_played >= MAX_ROUNDS as u8
         {
             game.status = GameStatus::Finished;
         }
-
+    
         emit!(RoundResultEvent {
             game_id: game.game_id,
             round: round_index,
@@ -534,9 +556,10 @@ pub mod rps_game {
             rounds_played: game.rounds_played,
             status: game.status,
         });
-
+    
         Ok(())
     }
+    
 
     /// Forfeit game - ends the game immediately and declares a winner.
     ///
@@ -821,6 +844,56 @@ pub mod rps_game {
         Ok(())
     }
 
+    /// Admin force refund - emergency function to refund stuck games.
+    ///
+    /// - Only callable by house_vault admin.
+    /// - Works on any game status (WaitingForPlayer2, Active, Cancelled, etc.)
+    /// - Refunds all vault funds to player1 (since player2 may not exist on-chain).
+    /// - Closes game account and returns rent to player1.
+    /// - Use this when normal cancel_game fails (e.g., player2 is System Program).
+    pub fn admin_force_refund(ctx: Context<AdminForceRefund>) -> Result<()> {
+        let game = &ctx.accounts.game;
+
+        // Admin auth is enforced by account constraint
+        msg!("Admin force refund for game: {:?}", game.game_id);
+        msg!("Current status: {:?}", game.status as u8);
+
+        // Get vault balance
+        let vault_balance = ctx.accounts.game_vault.lamports();
+        msg!("Vault balance: {} lamports", vault_balance);
+
+        // Transfer all vault funds to player1
+        if vault_balance > 0 {
+            let bump = ctx.bumps.game_vault;
+            let seeds: &[&[u8]] = &[
+                b"game_vault",
+                game.game_id.as_ref(),
+                &[bump],
+            ];
+            let signer_seeds: &[&[&[u8]]] = &[seeds];
+
+            transfer_with_signer(
+                vault_balance,
+                &ctx.accounts.game_vault.to_account_info(),
+                &ctx.accounts.player1.to_account_info(),
+                &ctx.accounts.system_program,
+                signer_seeds,
+            )?;
+
+            msg!("Refunded {} lamports to player1", vault_balance);
+        }
+
+        emit!(AdminForceRefundEvent {
+            game_id: game.game_id,
+            player1: game.player1,
+            refund_amount: vault_balance,
+            admin: ctx.accounts.admin.key(),
+        });
+
+        // Anchor will close game account and send rent to player1
+        Ok(())
+    }
+
     /// Allows player1 to cancel a game that never started (player2 never joined)
     /// after TIMEOUT_SLOTS have passed since creation.
     ///
@@ -954,6 +1027,14 @@ pub struct ResolveCommitTimeout<'info> {
 #[derive(Accounts)]
 pub struct ForfeitGame<'info> {
     /// Must be one of the players or their session key
+    #[account(
+        constraint =
+            caller.key() == game.player1 ||
+            caller.key() == game.player2 ||
+            caller.key() == game.session_p1 ||
+            caller.key() == game.session_p2
+            @ RpsError::NotAPlayer
+    )]
     pub caller: Signer<'info>,
 
     #[account(
@@ -1015,6 +1096,48 @@ pub struct AuthorizeSessionSigner<'info> {
             @ RpsError::NotAPlayer
     )]
     pub game: Account<'info, Game>,
+}
+
+#[derive(Accounts)]
+pub struct AdminForceRefund<'info> {
+    /// Admin must be the house_vault admin
+    #[account(
+        mut,
+        address = house_vault.admin @ RpsError::Unauthorized
+    )]
+    pub admin: Signer<'info>,
+
+    #[account(
+        seeds = [b"house_vault"],
+        bump = house_vault.bump,
+    )]
+    pub house_vault: Account<'info, HouseVault>,
+
+    #[account(
+        mut,
+        close = player1,
+        seeds = [b"game", &game.game_id],
+        bump = game.bump
+    )]
+    pub game: Account<'info, Game>,
+
+    /// CHECK: Player1 receives the refund. Address verified against game.player1.
+    #[account(
+        mut,
+        address = game.player1 @ RpsError::InvalidPlayerAccount
+    )]
+    pub player1: AccountInfo<'info>,
+
+    /// CHECK: Game vault PDA holding the bet. Address enforced via seeds + bump.
+    #[account(
+        mut,
+        seeds = [b"game_vault", &game.game_id],
+        bump,
+        owner = system_program::ID
+    )]
+    pub game_vault: UncheckedAccount<'info>,
+
+    pub system_program: Program<'info, System>,
 }
 
 #[derive(Accounts)]
@@ -1182,6 +1305,14 @@ pub struct GameCancelledEvent {
     pub player2: Pubkey,
     pub player1_refund: u64,
     pub player2_refund: u64,
+}
+
+#[event]
+pub struct AdminForceRefundEvent {
+    pub game_id: [u8; 32],
+    pub player1: Pubkey,
+    pub refund_amount: u64,
+    pub admin: Pubkey,
 }
 
 // ---------- Instruction Contexts ----------
