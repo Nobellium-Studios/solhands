@@ -955,7 +955,15 @@ pub struct ResolveCommitTimeout<'info> {
 
 #[derive(Accounts)]
 pub struct ForfeitGame<'info> {
-    /// Must be one of the players or their session key
+    #[account(
+        mut,
+        constraint =
+            caller.key() == game.player1 ||
+            caller.key() == game.player2 ||
+            caller.key() == game.session_p1 ||
+            caller.key() == game.session_p2
+            @ RpsError::NotAPlayer
+    )]
     pub caller: Signer<'info>,
 
     #[account(
