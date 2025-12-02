@@ -821,8 +821,8 @@ pub mod rps_game {
         Ok(())
     }
 
-    /// Allows anyone (mediator or player1) to cancel a game that never started
-    /// (player2 never joined) after TIMEOUT_SLOTS have passed since creation.
+    /// Allows player1 to cancel a game that never started (player2 never joined)
+    /// after TIMEOUT_SLOTS have passed since creation.
     ///
     /// - Refunds player1's bet from game_vault (entry fee stays with house).
     pub fn cancel_game_if_timed_out(ctx: Context<CancelGameIfTimedOut>) -> Result<()> {
@@ -832,7 +832,7 @@ pub mod rps_game {
             game.status == GameStatus::WaitingForPlayer2,
             RpsError::GameNotCancellable
         );
-        // player1 validation is done via constraint in the accounts struct
+        require_keys_eq!(ctx.accounts.player1.key(), game.player1, RpsError::NotAPlayer);
 
         let current_slot = Clock::get()?.slot;
         require!(
@@ -859,8 +859,6 @@ pub mod rps_game {
                 signer_seeds,
             )?;
         }
-
-        msg!("Game cancelled due to timeout. Refunded {} lamports to player1", amount);
 
         // Anchor will close game and send its rent to player1
         Ok(())
@@ -955,15 +953,7 @@ pub struct ResolveCommitTimeout<'info> {
 
 #[derive(Accounts)]
 pub struct ForfeitGame<'info> {
-    #[account(
-        mut,
-        constraint =
-            caller.key() == game.player1 ||
-            caller.key() == game.player2 ||
-            caller.key() == game.session_p1 ||
-            caller.key() == game.session_p2
-            @ RpsError::NotAPlayer
-    )]
+    /// Must be one of the players or their session key
     pub caller: Signer<'info>,
 
     #[account(
@@ -1029,16 +1019,8 @@ pub struct AuthorizeSessionSigner<'info> {
 
 #[derive(Accounts)]
 pub struct CancelGameIfTimedOut<'info> {
-    /// Anyone can call (mediator or player1) - no signer restriction
     #[account(mut)]
-    pub caller: Signer<'info>,
-
-    /// CHECK: Player 1 account to receive refund - validated against game.player1
-    #[account(
-        mut,
-        constraint = player1.key() == game.player1 @ RpsError::NotAPlayer
-    )]
-    pub player1: UncheckedAccount<'info>,
+    pub player1: Signer<'info>,
 
     #[account(
         mut,
