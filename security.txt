@@ -1,0 +1,3 @@
+Contact: mailto:info@nobellium.studio
+Expires: 2026-12-31T00:00:00Z
+Encryption: https://solhands.com/pgp.txt
