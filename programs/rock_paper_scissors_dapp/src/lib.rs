@@ -3,7 +3,7 @@ use anchor_lang::system_program;
 use anchor_lang::solana_program::{program::invoke_signed, system_instruction};
 use sha2::{Digest, Sha256};
 
-declare_id!("G7Z1FnF9np177M8gCYhn3sudAZsoms1C8UiHhBmYNWSU");
+declare_id!("Gdy8jkUZqJkiWc7TGuQsou8TcQP7Nay9n6Xaie4vxKGj");
 
 // 1% rake = 100 basis points
 const DEFAULT_HOUSE_FEE_BPS: u16 = 100;
