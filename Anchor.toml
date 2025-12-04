@@ -6,21 +6,21 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-rock_paper_scissors_dapp = "G7Z1FnF9np177M8gCYhn3sudAZsoms1C8UiHhBmYNWSU"
+rock_paper_scissors_dapp = "Gdy8jkUZqJkiWc7TGuQsou8TcQP7Nay9n6Xaie4vxKGj"
 
 [programs.devnet]
-rock_paper_scissors_dapp = "G7Z1FnF9np177M8gCYhn3sudAZsoms1C8UiHhBmYNWSU"
+rock_paper_scissors_dapp = "Gdy8jkUZqJkiWc7TGuQsou8TcQP7Nay9n6Xaie4vxKGj"
 
 [programs.mainnet]
-rock_paper_scissors_dapp = "G7Z1FnF9np177M8gCYhn3sudAZsoms1C8UiHhBmYNWSU"
+rock_paper_scissors_dapp = "Gdy8jkUZqJkiWc7TGuQsou8TcQP7Nay9n6Xaie4vxKGj"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "mainnet"
-url = "${ANCHOR_DEPLOY_RPC}"
-wallet = "~/.config/solana-secure/deploy-keypair.json"
+cluster = "devnet"
+url = "https://devnet.helius-rpc.com/?api-key=4369012c-e1e4-4efb-ada7-71236d61683b"
+wallet = "~/.config/solana/id.json"
 
 [scripts]
 test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 \"tests/**/*.ts\""
