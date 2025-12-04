@@ -1,0 +1,17 @@
+Solhands Game
+Copyright (c) 2025 Nobellium Studio Kft.
+Author: Koray Çil (GitHub: leonx99x)
+All Rights Reserved.
+
+This software contains proprietary and confidential material owned by 
+Nobellium Studio Kft. The source code is provided as source-available 
+for transparency, auditing, research, and non-commercial experimentation.
+
+No part of this software may be copied, modified, distributed, deployed, 
+or used commercially without prior written permission from 
+Nobellium Studio Kft.
+
+This NOTICE file is provided for informational purposes only and does 
+not grant any rights or licenses beyond those explicitly stated in 
+LICENSE.md. All trademarks, logos, and project-related intellectual 
+property remain the exclusive property of their respective owners.
