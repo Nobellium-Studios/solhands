@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 use anchor_lang::system_program;
 use anchor_lang::solana_program::{program::invoke_signed, system_instruction};
 use sha2::{Digest, Sha256};
+use std::str::FromStr;
 
 declare_id!("Gdy8jkUZqJkiWc7TGuQsou8TcQP7Nay9n6Xaie4vxKGj");
 
@@ -53,6 +54,11 @@ pub mod rps_game {
     use super::*;
 
     pub fn init_house_vault(ctx: Context<InitHouseVault>) -> Result<()> {
+        // Only the authorized initializer may run this once
+        let authorized = Pubkey::from_str("FmeuxQMqMsR7WQz6jqbBcbAUcdRapFBttd6BqmtuHKPm")
+            .map_err(|_| error!(RpsError::Unauthorized))?;
+        require_keys_eq!(ctx.accounts.admin.key(), authorized, RpsError::Unauthorized);
+
         let vault = &mut ctx.accounts.house_vault;
         vault.bump = ctx.bumps.house_vault;
         vault.admin = ctx.accounts.admin.key();
